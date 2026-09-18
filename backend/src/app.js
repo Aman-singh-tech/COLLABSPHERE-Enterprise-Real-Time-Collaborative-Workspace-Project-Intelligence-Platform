@@ -3,7 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
-const passport = require('./config/passport');
+
 const env = require('./config/env');
 const routes = require('./routes');
 const auditContext = require('./middlewares/audit.middleware');
@@ -48,8 +48,6 @@ if (env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
-// Passport (stateless, JWT-based; used only for Google OAuth strategy)
-app.use(passport.initialize());
 
 // Audit trail helper (req.audit(...))
 app.use(auditContext);

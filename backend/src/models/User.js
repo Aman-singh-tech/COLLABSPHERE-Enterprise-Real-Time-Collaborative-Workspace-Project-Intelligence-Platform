@@ -21,13 +21,7 @@ const userSchema = new mongoose.Schema(
     avatar: { type: String, default: '' },
     jobTitle: { type: String, default: '' },
 
-    // Google OAuth (Redirect + PKCE flow)
-    googleId: { type: String, unique: true, sparse: true },
-    authProvider: {
-      type: String,
-      enum: ['local', 'google'],
-      default: 'local',
-    },
+
 
     isEmailVerified: { type: Boolean, default: false },
     emailVerificationToken: { type: String, select: false },

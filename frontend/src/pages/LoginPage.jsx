@@ -1,19 +1,13 @@
 import { Link } from 'react-router-dom';
 import AuthLayout from '../layouts/AuthLayout';
 import LoginForm from '../components/auth/LoginForm';
-import GoogleLoginButton from '../components/auth/GoogleLoginButton';
+
 
 const LoginPage = () => {
   return (
     <AuthLayout title="Welcome back" subtitle="Enter your details to access your workspace.">
       <div className="space-y-4">
-        <GoogleLoginButton />
 
-        <div className="flex items-center gap-3">
-          <div className="h-px flex-1 bg-gray-200" />
-          <span className="text-xs uppercase tracking-wide text-gray-400">Or</span>
-          <div className="h-px flex-1 bg-gray-200" />
-        </div>
 
         <LoginForm />
 

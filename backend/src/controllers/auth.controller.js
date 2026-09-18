@@ -35,16 +35,6 @@ const login = catchAsync(async (req, res) => {
     .json(new ApiResponse(200, { user: user.toSafeObject(), accessToken }, 'Logged in successfully.'));
 });
 
-// GET /api/v1/auth/google -> handled by passport.authenticate in routes
-// GET /api/v1/auth/google/callback
-const googleCallback = catchAsync(async (req, res) => {
-  // req.user set by passport GoogleStrategy
-  const { accessToken, refreshToken } = await authService.issueTokens(req.user, req);
-  setAuthCookies(res, accessToken, refreshToken);
-
-  // Redirect back to frontend after successful OAuth
-  res.redirect(`${env.CLIENT_URL}/auth/callback`);
-});
 
 // POST /api/v1/auth/refresh
 const refresh = catchAsync(async (req, res) => {
@@ -105,7 +95,7 @@ const verifyEmail = catchAsync(async (req, res) => {
 module.exports = {
   signup,
   login,
-  googleCallback,
+
   refresh,
   logout,
   getMe,
