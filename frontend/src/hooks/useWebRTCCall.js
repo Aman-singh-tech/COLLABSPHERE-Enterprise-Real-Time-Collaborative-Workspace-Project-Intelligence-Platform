@@ -46,10 +46,21 @@ export const useWebRTCCall = ({ socket, activeChatId, user }) => {
   const screenTrackRef = useRef(null);
   const timerRef = useRef(null);
   const activeChatIdRef = useRef(activeChatId);
+  const isCallActiveRef = useRef(false);   // ref-copy so reconnect handler sees live value
+  const socketRef = useRef(socket);         // ref-copy so reconnect closure is never stale
 
   useEffect(() => {
     activeChatIdRef.current = activeChatId;
   }, [activeChatId]);
+
+  useEffect(() => {
+    socketRef.current = socket;
+  }, [socket]);
+
+  // Keep isCallActiveRef in sync
+  useEffect(() => {
+    isCallActiveRef.current = isCallActive;
+  }, [isCallActive]);
 
   // Handle call timer
   useEffect(() => {
@@ -71,23 +82,31 @@ export const useWebRTCCall = ({ socket, activeChatId, user }) => {
   const cleanupCall = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
 
+    // Close all peer connections
     peerConnectionsRef.current.forEach((pc) => {
-      try {
-        pc.close();
-      } catch (e) {
-        // ignore
-      }
+      try { pc.close(); } catch (e) { /* ignore */ }
     });
     peerConnectionsRef.current.clear();
     pendingCandidatesRef.current.clear();
 
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((track) => track.stop());
-      localStreamRef.current = null;
-    }
+    // Stop screen share track first
     if (screenTrackRef.current) {
       try { screenTrackRef.current.stop(); } catch (e) { /* ignore */ }
       screenTrackRef.current = null;
+    }
+
+    // Stop all local media tracks (camera + mic)
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => {
+        try { track.stop(); } catch (e) { /* ignore */ }
+      });
+      localStreamRef.current = null;
+    }
+    cameraTrackRef.current = null;
+
+    // Exit fullscreen if active
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
     }
 
     setLocalStream(null);
@@ -209,7 +228,8 @@ export const useWebRTCCall = ({ socket, activeChatId, user }) => {
 
     pc.onconnectionstatechange = () => {
       console.log(`[WebRTC] Connection state for ${targetSocketId}: ${pc.connectionState}`);
-      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+        // Hard failure — remove immediately
         peerConnectionsRef.current.delete(targetSocketId);
         pendingCandidatesRef.current.delete(targetSocketId);
         setParticipants((prev) => {
@@ -218,6 +238,9 @@ export const useWebRTCCall = ({ socket, activeChatId, user }) => {
           return next;
         });
       }
+      // 'disconnected' is transient — WebRTC may self-recover within a few seconds.
+      // We intentionally do NOT remove the peer here; oniceconnectionstatechange
+      // will handle a hard 'failed' if recovery doesn't happen.
     };
 
     if (isInitiator) {
@@ -373,6 +396,38 @@ export const useWebRTCCall = ({ socket, activeChatId, user }) => {
     };
   }, [socket, isCallActive, createPeerConnection, flushCandidates]);
 
+  // ── Socket Reconnect Handler ─────────────────────────────────────────────
+  // If the socket drops & reconnects mid-call, automatically re-join the call
+  // room so signalling resumes and peer connections can be re-established.
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleReconnect = () => {
+      if (!isCallActiveRef.current || !activeChatIdRef.current) return;
+      console.log('[WebRTC] Socket reconnected during active call — re-joining call room...');
+
+      // Close stale peer connections; the other side will re-offer
+      peerConnectionsRef.current.forEach((pc) => {
+        try { pc.close(); } catch (e) { /* ignore */ }
+      });
+      peerConnectionsRef.current.clear();
+      pendingCandidatesRef.current.clear();
+      setParticipants({});
+
+      // Re-join the call room on the server
+      socketRef.current.emit('call:join', { chatId: activeChatIdRef.current });
+    };
+
+    socket.on('reconnect', handleReconnect);
+    socket.io.on('reconnect', handleReconnect); // socket.io manager-level event
+
+    return () => {
+      socket.off('reconnect', handleReconnect);
+      socket.io.off('reconnect', handleReconnect);
+    };
+  }, [socket]);
+
+
   // Start / Join Call
   const startCall = async () => {
     try {
@@ -415,13 +470,23 @@ export const useWebRTCCall = ({ socket, activeChatId, user }) => {
     }
   };
 
-  // Leave Call
-  const leaveCall = () => {
-    if (socket && activeChatIdRef.current) {
-      socket.emit('call:leave', { chatId: activeChatIdRef.current });
+  // Leave Call — capture socket & chatId at call-time so they're never stale
+  const leaveCall = useCallback(() => {
+    // Grab current values synchronously before any state change
+    const chatId = activeChatIdRef.current;
+    const currentSocket = socket;
+
+    // 1. Notify server FIRST (before listeners are torn down by isCallActive→false)
+    if (currentSocket && chatId) {
+      currentSocket.emit('call:leave', { chatId });
     }
-    cleanupCall();
-  };
+
+    // 2. Run cleanup on next tick so the emit is flushed before the effect
+    //    that watches isCallActive removes the socket listeners
+    setTimeout(() => {
+      cleanupCall();
+    }, 0);
+  }, [socket, cleanupCall]);
 
   // Toggle Microphone
   const toggleAudio = () => {

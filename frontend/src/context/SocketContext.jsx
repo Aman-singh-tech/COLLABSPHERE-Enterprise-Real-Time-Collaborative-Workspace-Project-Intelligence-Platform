@@ -24,16 +24,25 @@ export const SocketProvider = ({ children }) => {
       transports: ['websocket', 'polling'],
     });
 
+    // Heartbeat / keep‑alive – emit a lightweight event every 20 s to keep the WebSocket alive
+    const keepAliveInterval = setInterval(() => {
+      socket.emit('ping:keepalive');
+    }, 20000);
+
     socket.on('connect', () => setConnected(true));
     socket.on('disconnect', () => setConnected(false));
+    socket.on('reconnect', () => setConnected(true));
     socket.on('connect_error', (err) => {
       // eslint-disable-next-line no-console
       console.error('Socket connection error:', err.message);
     });
 
+
+
     socketRef.current = socket;
 
     return () => {
+      clearInterval(keepAliveInterval);
       socket.disconnect();
     };
   }, [isAuthenticated]);

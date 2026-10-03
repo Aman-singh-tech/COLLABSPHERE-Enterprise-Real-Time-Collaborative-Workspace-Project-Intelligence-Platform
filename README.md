@@ -1,8 +1,16 @@
-# CollabSphere
+## 🚀 CollabSphere
 
-**Enterprise Real-Time Collaborative Workspace & Project Intelligence Platform**
+CollabSphere is a **real-time collaborative project management platform** where teams can create organizations, manage projects using a **Kanban board**, collaborate on documents, chat in real time, and join online meetings through **Google Meet**.
 
-A unified workspace that combines project management, Google Docs-style collaborative editing, team chat, file management with version control, and analytics — built with a plain JavaScript backend (Express + MongoDB) and a JSX frontend (React + Vite).
+### ✨ Key Features
+- 🏢 Create & join organizations
+- 📋 Kanban-based project management
+- 🤝 Real-time collaboration
+- 📝 Shared document management
+- 💬 Real-time chat
+- 📹 Google Meet integration
+- 📊 Activity logs & data analysis
+
 
 ## Repository Structure
 

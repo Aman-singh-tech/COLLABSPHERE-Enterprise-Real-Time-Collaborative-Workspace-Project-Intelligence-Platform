@@ -27,6 +27,9 @@ const initSocket = (httpServer) => {
       },
       credentials: true,
     },
+    pingInterval: 10000, // send ping every 10s
+    pingTimeout: 30000,  // consider dead after 30s without pong
+    transports: ['websocket'],
   });
 
   io.use(socketAuthMiddleware);
