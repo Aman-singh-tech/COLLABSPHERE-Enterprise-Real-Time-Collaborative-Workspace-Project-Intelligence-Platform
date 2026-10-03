@@ -26,6 +26,7 @@ const taskSchema = new mongoose.Schema(
 
     assignees: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     dueDate: { type: Date },
+    completedAt: { type: Date, default: null },
 
     checklist: [checklistItemSchema],
     attachments: [{ type: mongoose.Schema.Types.ObjectId, ref: 'File' }],

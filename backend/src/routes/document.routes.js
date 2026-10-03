@@ -10,6 +10,9 @@ router.use(protect);
 
 router.post('/', createDocumentValidator, validate, documentController.createDocument);
 router.get('/', documentController.getDocuments);
+router.use('/:id', documentController.requireDocumentAccess);
+router.patch('/:id/content', documentController.saveContent);
+router.post('/:id/comments', documentController.addComment);
 router.get('/:id', documentController.getDocumentById);
 router.patch('/:id', documentController.updateDocumentMeta);
 router.delete('/:id', documentController.archiveDocument);

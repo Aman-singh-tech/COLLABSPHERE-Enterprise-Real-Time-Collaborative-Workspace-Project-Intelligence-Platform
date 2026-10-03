@@ -1,18 +1,17 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Search, Plus, Bell, LogOut, User as UserIcon, Settings as SettingsIcon } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import Avatar from './Avatar';
 import Dropdown, { DropdownItem } from './Dropdown';
 import { useAuth } from '../../hooks/useAuth';
-import { useDebounce } from '../../hooks/useDebounce';
 
 const Navbar = ({ onSearch, onQuickAdd }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { workspaceId } = useParams();
   const { unreadCount } = useSelector((state) => state.notification);
   const [query, setQuery] = useState('');
-  const debouncedQuery = useDebounce(query, 400);
 
   const handleSearchChange = (e) => {
     setQuery(e.target.value);
@@ -32,6 +31,11 @@ const Navbar = ({ onSearch, onQuickAdd }) => {
           type="text"
           value={query}
           onChange={handleSearchChange}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && query.trim().length >= 2) {
+              navigate(`/workspaces/${workspaceId}/search?q=${encodeURIComponent(query.trim())}`);
+            }
+          }}
           placeholder="Search workspace..."
           className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-9 pr-3 text-sm outline-none focus:border-primary-500 focus:bg-white focus:ring-1 focus:ring-primary-500"
         />
@@ -47,7 +51,7 @@ const Navbar = ({ onSearch, onQuickAdd }) => {
         </button>
 
         <button
-          onClick={() => navigate(`notifications`)}
+          onClick={() => navigate(`/workspaces/${workspaceId}/notifications`)}
           className="relative rounded-lg p-2 text-gray-500 hover:bg-gray-100"
           aria-label="Notifications"
         >
@@ -67,10 +71,10 @@ const Navbar = ({ onSearch, onQuickAdd }) => {
             </p>
             <p className="truncate text-xs text-gray-500">{user?.email}</p>
           </div>
-          <DropdownItem icon={UserIcon} onClick={() => navigate('settings')}>
+          <DropdownItem icon={UserIcon} onClick={() => navigate(`/workspaces/${workspaceId}/settings`)}>
             Profile
           </DropdownItem>
-          <DropdownItem icon={SettingsIcon} onClick={() => navigate('settings')}>
+          <DropdownItem icon={SettingsIcon} onClick={() => navigate(`/workspaces/${workspaceId}/settings`)}>
             Settings
           </DropdownItem>
           <DropdownItem icon={LogOut} danger onClick={handleLogout}>

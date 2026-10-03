@@ -6,6 +6,7 @@
   "type": "commonjs",
   "scripts": {
     "start": "node src/server.js",
+    "test": "node --test test/*.test.cjs",
     "dev": "nodemon src/server.js",
     "seed": "node src/utils/seed.js"
   },
@@ -33,6 +34,7 @@
     "uuid": "^10.0.0"
   },
   "devDependencies": {
+    "mongodb-memory-server": "^11.3.0",
     "nodemon": "^3.1.4"
   },
   "engines": {

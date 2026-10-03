@@ -4,7 +4,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Plus, Boxes, UserPlus, Key } from 'lucide-react';
 import Modal from '../components/common/Modal';
 import Loader from '../components/common/Loader';
-import { fetchMyWorkspaces } from '../store/workspaceSlice';
+import { fetchMyWorkspaces, setActiveWorkspace } from '../store/workspaceSlice';
 import { workspaceService } from '../services/workspace.service';
 import api from '../services/api';
 import toast from 'react-hot-toast';
@@ -39,6 +39,8 @@ const WorkspaceSelectPage = () => {
       }
 
       const res = await workspaceService.create({ name, organizationId: orgId });
+      dispatch(setActiveWorkspace(res.data.workspace));
+      await dispatch(fetchMyWorkspaces()).unwrap();
       toast.success('Workspace created!');
       navigate(`/workspaces/${res.data.workspace._id}`);
     } catch (err) {
@@ -58,7 +60,8 @@ const WorkspaceSelectPage = () => {
     try {
       const res = await workspaceService.join(inviteCode.trim());
       toast.success(res.message || 'Joined workspace successfully!');
-      dispatch(fetchMyWorkspaces());
+      dispatch(setActiveWorkspace(res.data.workspace));
+      await dispatch(fetchMyWorkspaces()).unwrap();
       setIsJoinModalOpen(false);
       setInviteCode('');
       navigate(`/workspaces/${res.data.workspace._id}`);

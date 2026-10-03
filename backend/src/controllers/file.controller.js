@@ -1,9 +1,30 @@
 const catchAsync = require('../utils/catchAsync');
 const ApiResponse = require('../utils/apiResponse');
 const ApiError = require('../utils/apiError');
-const { File, FileVersion, Workspace } = require('../models');
+const { File, FileVersion, Workspace, User } = require('../models');
 const { buildFileUrl, deletePhysicalFile, bytesToMB } = require('../services/file.service');
 const { pushNotification } = require('../sockets/notification.socket');
+
+const getWorkspace = async (workspaceId, userId, write = false) => {
+  const workspace = await Workspace.findOne({ _id: workspaceId, isActive: true, 'members.user': userId });
+  if (!workspace) throw new ApiError(403, 'You do not have access to this workspace.');
+  if (write && workspace.members.find((member) => member.user.toString() === userId.toString()).role === 'guest') throw new ApiError(403, 'Guests cannot upload files.');
+  return workspace;
+};
+
+const requireFileAccess = catchAsync(async (req, res, next) => {
+  const file = await File.findById(req.params.id);
+  if (!file) throw new ApiError(404, 'File not found.');
+  const workspace = await Workspace.findOne({ _id: file.workspace, isActive: true, 'members.user': req.user._id });
+  if (!workspace) throw new ApiError(403, 'You do not have access to this file.');
+  const member = workspace.members.find((item) => item.user.toString() === req.user._id.toString());
+  const owner = file.owner.toString() === req.user._id.toString();
+  const manager = ['workspace_admin', 'project_manager', 'org_admin', 'super_admin'].includes(member.role);
+  const permission = file.permissions.find((item) => item.user.toString() === req.user._id.toString());
+  if (req.method !== 'GET' && !owner && !manager && !['edit', 'manage'].includes(permission?.access)) throw new ApiError(403, 'You cannot modify this file.');
+  if (req.path.endsWith('/share') && !owner && !manager && permission?.access !== 'manage') throw new ApiError(403, 'You cannot share this file.');
+  next();
+});
 
 // POST /api/v1/files/upload
 const uploadFile = catchAsync(async (req, res) => {
@@ -11,8 +32,8 @@ const uploadFile = catchAsync(async (req, res) => {
 
   const { workspaceId, folderId } = req.body;
 
-  const workspace = await Workspace.findById(workspaceId);
-  if (!workspace) throw new ApiError(404, 'Workspace not found.');
+  const workspace = await getWorkspace(workspaceId, req.user._id, true);
+  if (folderId && !await File.exists({ _id: folderId, workspace: workspaceId, isFolder: true })) throw new ApiError(400, 'Invalid parent folder.');
 
   const sizeMB = bytesToMB(req.file.size);
   if (workspace.storageUsedMB + sizeMB > workspace.storageQuotaMB) {
@@ -43,6 +64,8 @@ const uploadFile = catchAsync(async (req, res) => {
 // POST /api/v1/files/folders
 const createFolder = catchAsync(async (req, res) => {
   const { name, workspaceId, folderId } = req.body;
+  await getWorkspace(workspaceId, req.user._id, true);
+  if (folderId && !await File.exists({ _id: folderId, workspace: workspaceId, isFolder: true })) throw new ApiError(400, 'Invalid parent folder.');
 
   const folder = await File.create({
     name,
@@ -64,6 +87,7 @@ const createFolder = catchAsync(async (req, res) => {
 const listFiles = catchAsync(async (req, res) => {
   const { workspaceId, folderId = null } = req.query;
   if (!workspaceId) throw new ApiError(400, 'workspaceId query param is required.');
+  await getWorkspace(workspaceId, req.user._id);
 
   const files = await File.find({
     workspace: workspaceId,
@@ -94,6 +118,13 @@ const uploadNewVersion = catchAsync(async (req, res) => {
   const file = await File.findById(req.params.id);
   if (!file) throw new ApiError(404, 'File not found.');
   if (file.isLocked) throw new ApiError(423, 'File is locked and cannot be updated.');
+  if (file.isFolder) throw new ApiError(400, 'Folders cannot have file versions.');
+  const workspace = await getWorkspace(file.workspace, req.user._id, true);
+  const sizeMB = bytesToMB(req.file.size);
+  if (workspace.storageUsedMB + sizeMB > workspace.storageQuotaMB) {
+    deletePhysicalFile(`uploads/files/${req.file.filename}`);
+    throw new ApiError(413, 'Storage quota exceeded for this workspace.');
+  }
 
   // Archive current version
   await FileVersion.create({
@@ -101,6 +132,7 @@ const uploadNewVersion = catchAsync(async (req, res) => {
     path: file.path,
     url: file.url,
     size: file.size,
+    mimeType: file.mimeType,
     versionLabel: req.body.versionLabel || `Version ${new Date().toLocaleDateString()}`,
     uploadedBy: file.owner,
   });
@@ -109,7 +141,10 @@ const uploadNewVersion = catchAsync(async (req, res) => {
   file.path = `uploads/files/${req.file.filename}`;
   file.url = buildFileUrl(req, req.file.filename);
   file.size = req.file.size;
+  file.mimeType = req.file.mimetype;
   await file.save();
+  workspace.storageUsedMB += sizeMB;
+  await workspace.save();
 
   await req.audit('file_version_upload', 'File', file._id);
 
@@ -119,11 +154,15 @@ const uploadNewVersion = catchAsync(async (req, res) => {
 // POST /api/v1/files/:id/versions/:versionId/restore
 const restoreVersion = catchAsync(async (req, res) => {
   const version = await FileVersion.findById(req.params.versionId);
-  if (!version) throw new ApiError(404, 'Version not found.');
+  if (!version || version.file.toString() !== req.params.id) throw new ApiError(404, 'Version not found.');
+  const currentFile = await File.findById(req.params.id);
+  if (!currentFile) throw new ApiError(404, 'File not found.');
+  if (currentFile.isLocked) throw new ApiError(423, 'Unlock the file before restoring a version.');
+  await FileVersion.create({ file: currentFile._id, path: currentFile.path, url: currentFile.url, size: currentFile.size, mimeType: currentFile.mimeType, versionLabel: 'Before restore', uploadedBy: req.user._id });
 
   const file = await File.findByIdAndUpdate(
     req.params.id,
-    { path: version.path, url: version.url, size: version.size },
+    { path: version.path, url: version.url, size: version.size, mimeType: version.mimeType || currentFile.mimeType },
     { new: true }
   );
 
@@ -144,10 +183,14 @@ const toggleLock = catchAsync(async (req, res) => {
 
 // POST /api/v1/files/:id/share
 const shareFile = catchAsync(async (req, res) => {
-  const { userId, access = 'view' } = req.body;
+  let { userId, email, access = 'view' } = req.body;
   const file = await File.findById(req.params.id);
   if (!file) throw new ApiError(404, 'File not found.');
 
+  if (!['view', 'edit', 'manage'].includes(access)) throw new ApiError(400, 'Invalid sharing permission.');
+  if (email) userId = (await User.findOne({ email: email.trim().toLowerCase() }))?._id?.toString();
+  if (!userId) throw new ApiError(404, 'Recipient account not found. Invite them to the workspace first.');
+  if (!await Workspace.exists({ _id: file.workspace, 'members.user': userId })) throw new ApiError(400, 'Recipient must be a member of this workspace.');
   const existing = file.permissions.find((p) => p.user.toString() === userId);
   if (existing) {
     existing.access = access;
@@ -210,6 +253,7 @@ const deleteFile = catchAsync(async (req, res) => {
 });
 
 module.exports = {
+  requireFileAccess,
   uploadFile,
   createFolder,
   listFiles,

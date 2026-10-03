@@ -17,6 +17,11 @@ const documentSchema = new mongoose.Schema(
     ],
 
     tags: [{ type: String }],
+    comments: [{
+      author: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+      content: { type: String, required: true, trim: true, maxlength: 5000 },
+      createdAt: { type: Date, default: Date.now },
+    }],
     isArchived: { type: Boolean, default: false },
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },

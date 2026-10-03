@@ -41,11 +41,13 @@ const TaskModal = ({ isOpen, onClose, taskId, onUpdated, onDeleted }) => {
     const res = await taskService.addChecklistItem(taskId, newChecklistItem.trim());
     setTask(res.data.task);
     setNewChecklistItem('');
+    onUpdated?.(res.data.task);
   };
 
   const handleToggleChecklist = async (itemId) => {
     const res = await taskService.toggleChecklistItem(taskId, itemId);
     setTask(res.data.task);
+    onUpdated?.(res.data.task);
   };
 
   const handleAddComment = async () => {

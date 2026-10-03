@@ -21,6 +21,8 @@ const FilesPage = lazy(() => import('../pages/FilesPage'));
 const AnalyticsPage = lazy(() => import('../pages/AnalyticsPage'));
 const SettingsPage = lazy(() => import('../pages/SettingsPage'));
 const NotFoundPage = lazy(() => import('../pages/NotFoundPage'));
+const SearchPage = lazy(() => import('../pages/SearchPage'));
+const NotificationsPage = lazy(() => import('../pages/NotificationsPage'));
 
 const AppRoutes = () => {
   return (
@@ -61,6 +63,8 @@ const AppRoutes = () => {
           <Route path="files" element={<FilesPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="search" element={<SearchPage />} />
+          <Route path="notifications" element={<NotificationsPage />} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />

@@ -7,6 +7,7 @@ import UploadDropzone from '../components/files/UploadDropzone';
 import Modal from '../components/common/Modal';
 import Loader from '../components/common/Loader';
 import toast from 'react-hot-toast';
+import api from '../services/api';
 
 const FilesPage = () => {
   const { workspaceId } = useParams();
@@ -20,10 +21,13 @@ const FilesPage = () => {
   const [folderName, setFolderName] = useState('');
   const [showDropzone, setShowDropzone] = useState(false);
   const fileInputRef = useRef(null);
+  const versionInputRef = useRef(null);
+  const [shareEmail, setShareEmail] = useState('');
+  const [shareFile, setShareFile] = useState(null);
 
   const loadFiles = (folderId = null) => {
     setLoading(true);
-    fileService
+    return fileService
       .list(workspaceId, folderId)
       .then((res) => setFiles(res.data.files))
       .finally(() => setLoading(false));
@@ -54,8 +58,8 @@ const FilesPage = () => {
   };
 
   const handleSelectFile = async (file) => {
-    setSelectedFile(file);
     const res = await fileService.getDetails(file._id);
+    setSelectedFile(res.data.file);
     setVersions(res.data.versions);
   };
 
@@ -73,6 +77,7 @@ const FilesPage = () => {
   };
 
   const handleFilesSelected = async (fileList) => {
+    let uploaded = 0;
     for (const file of fileList) {
       const formData = new FormData();
       formData.append('file', file);
@@ -81,20 +86,45 @@ const FilesPage = () => {
 
       try {
         await fileService.upload(formData);
+        uploaded += 1;
       } catch (err) {
         toast.error(err.response?.data?.message || `Failed to upload ${file.name}.`);
       }
     }
-    toast.success('Upload complete.');
+    if (uploaded) toast.success(`${uploaded} file(s) uploaded.`);
     setShowDropzone(false);
     loadFiles(currentFolder);
   };
 
   const handleShare = async (file) => {
-    const email = window.prompt('Share with (email):');
-    if (!email) return;
-    // In a full implementation, resolve email -> userId first.
-    toast('Sharing requires resolving the recipient by email on the backend.', { icon: 'ℹ️' });
+    setShareFile(file); setShareEmail('');
+  };
+  const submitShare = async () => {
+    try { await fileService.share(shareFile._id, { email: shareEmail, access: 'view' }); toast.success('File shared.'); setShareFile(null); }
+    catch (error) { toast.error(error.response?.data?.message || 'Could not share file.'); }
+  };
+  const downloadFile = async (file) => {
+    try {
+      const response = await fileService.trackDownload(file._id);
+      const download = await api.get(response.data.url, { responseType: 'blob' });
+      const url = URL.createObjectURL(download.data);
+      const anchor = document.createElement('a'); anchor.href = url; anchor.download = file.originalName;
+      document.body.appendChild(anchor); anchor.click(); anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) { toast.error(error.response?.data?.message || 'Download failed.'); }
+  };
+  const toggleLock = async (file) => {
+    try { await fileService.toggleLock(file._id); await handleSelectFile(file); await loadFiles(currentFolder); }
+    catch (error) { toast.error(error.response?.data?.message || 'Could not change file lock.'); }
+  };
+  const uploadVersion = async (file) => {
+    const formData = new FormData(); formData.append('file', file);
+    try { await fileService.uploadNewVersion(selectedFile._id, formData); await handleSelectFile(selectedFile); await loadFiles(currentFolder); toast.success('New version uploaded.'); }
+    catch (error) { toast.error(error.response?.data?.message || 'Version upload failed.'); }
+  };
+  const restoreVersion = async (versionId) => {
+    try { await fileService.restoreVersion(selectedFile._id, versionId); await handleSelectFile(selectedFile); await loadFiles(currentFolder); toast.success('File version restored.'); }
+    catch (error) { toast.error(error.response?.data?.message || 'Restore failed.'); }
   };
 
   const handleDeleteFile = async (file) => {
@@ -153,9 +183,18 @@ const FilesPage = () => {
           onClose={() => setSelectedFile(null)}
           onShare={handleShare}
           onDelete={handleDeleteFile}
+          onDownload={downloadFile}
+          onToggleLock={toggleLock}
+          onUploadVersion={() => versionInputRef.current?.click()}
+          onRestoreVersion={restoreVersion}
         />
       )}
 
+      <input type="file" ref={versionInputRef} className="hidden" onChange={(event) => { if (event.target.files[0]) uploadVersion(event.target.files[0]); event.target.value = ''; }} />
+      <Modal isOpen={!!shareFile} onClose={() => setShareFile(null)} title="Share File">
+        <input type="email" placeholder="Workspace member email" value={shareEmail} onChange={(event) => setShareEmail(event.target.value)} className="w-full rounded border p-2" />
+        <button onClick={submitShare} disabled={!shareEmail.trim()} className="mt-3 rounded bg-primary-600 px-4 py-2 text-white disabled:opacity-50">Share File</button>
+      </Modal>
       <Modal isOpen={isFolderModalOpen} onClose={() => setIsFolderModalOpen(false)} title="New Folder">
         <div className="space-y-4">
           <input

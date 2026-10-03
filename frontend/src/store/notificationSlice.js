@@ -42,7 +42,9 @@ const notificationSlice = createSlice({
     },
   },
   extraReducers: (builder) => {
-    builder.addCase(fetchNotifications.fulfilled, (state, action) => {
+    builder.addCase(fetchNotifications.pending, (state) => { state.status = 'loading'; })
+      .addCase(fetchNotifications.rejected, (state) => { state.status = 'failed'; })
+      .addCase(fetchNotifications.fulfilled, (state, action) => {
       state.items = action.payload.notifications;
       state.unreadCount = action.payload.unreadCount;
       state.status = 'succeeded';

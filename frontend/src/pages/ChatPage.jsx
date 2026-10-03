@@ -69,7 +69,8 @@ const ChatPage = () => {
     const handleNewMessage = (msg) => {
       const msgChatId = msg.chat?._id || msg.chat;
       if (String(msgChatId) === String(activeChatId)) {
-        dispatch(receiveMessage(msg));
+        if (msg.parentMessage) dispatch(fetchMessages(activeChatId));
+        else dispatch(receiveMessage(msg));
       }
     };
     const handleReactionUpdate = (payload) => dispatch(updateMessageReactions(payload));
@@ -163,6 +164,7 @@ const ChatPage = () => {
         currentUserId={user?._id}
         onToggleInfo={() => {}}
         onStartCall={webrtcCall.startCall}
+        isStartingCall={webrtcCall.isStartingCall}
         isCallActive={webrtcCall.isCallActive}
         callActiveCount={callActiveCount}
       />

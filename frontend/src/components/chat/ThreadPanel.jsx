@@ -4,11 +4,13 @@ import Avatar from '../common/Avatar';
 import MessageInput from './MessageInput';
 import { chatService } from '../../services/chat.service';
 import { formatRelativeTime } from '../../utils/formatDate';
+import { useSocket } from '../../hooks/useSocket';
 
 const URL_REGEX = /(https?:\/\/[^\s]+)/g;
 
 const ThreadPanel = ({ parentMessage, onClose, onReply }) => {
   const [replies, setReplies] = useState([]);
+  const { socket } = useSocket();
 
   const renderFormattedContent = (content) => {
     if (!content) return null;
@@ -37,19 +39,18 @@ const ThreadPanel = ({ parentMessage, onClose, onReply }) => {
     }
   }, [parentMessage]);
 
+  useEffect(() => {
+    const receive = (message) => {
+      if (String(message.parentMessage) === String(parentMessage?._id)) setReplies((previous) => previous.some((reply) => reply._id === message._id) ? previous : [...previous, message]);
+    };
+    socket?.on('message:new', receive);
+    return () => socket?.off('message:new', receive);
+  }, [socket, parentMessage?._id]);
+
   if (!parentMessage) return null;
 
   const handleReply = (content) => {
     onReply(content, parentMessage._id);
-    setReplies((prev) => [
-      ...prev,
-      {
-        _id: `temp-${Date.now()}`,
-        content,
-        sender: parentMessage.sender,
-        createdAt: new Date().toISOString(),
-      },
-    ]);
   };
 
   return (

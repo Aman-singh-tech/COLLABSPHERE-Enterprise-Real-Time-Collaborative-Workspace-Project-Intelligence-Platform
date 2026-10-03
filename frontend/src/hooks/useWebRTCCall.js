@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { requestCallMedia } from '../utils/media';
 
 const ICE_SERVERS = {
   iceServers: [
@@ -31,6 +32,9 @@ const ICE_SERVERS = {
 
 export const useWebRTCCall = ({ socket, activeChatId, user }) => {
   const [isCallActive, setIsCallActive] = useState(false);
+  const [isStartingCall, setIsStartingCall] = useState(false);
+  const callRequest = useRef(0);
+  const startingRef = useRef(false);
   const [localStream, setLocalStream] = useState(null);
   const [participants, setParticipants] = useState({}); // socketId -> { stream, user, isMuted, isVideoOff, isScreenSharing }
   const [isMuted, setIsMuted] = useState(false);
@@ -80,6 +84,9 @@ export const useWebRTCCall = ({ socket, activeChatId, user }) => {
 
   // Clean peer connections and stream
   const cleanupCall = useCallback(() => {
+    callRequest.current += 1;
+    startingRef.current = false;
+    setIsStartingCall(false);
     if (timerRef.current) clearInterval(timerRef.current);
 
     // Close all peer connections
@@ -430,24 +437,32 @@ export const useWebRTCCall = ({ socket, activeChatId, user }) => {
 
   // Start / Join Call
   const startCall = async () => {
+    if (startingRef.current || isCallActiveRef.current) return;
+    if (!socket?.connected || !activeChatIdRef.current) { setError('Chat connection is offline. Wait for reconnect and retry.'); return; }
+    const request = ++callRequest.current;
+    const chatId = activeChatIdRef.current;
+    startingRef.current = true;
+    setIsStartingCall(true);
     try {
       setError(null);
       let stream;
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
+        stream = await requestCallMedia(navigator.mediaDevices, {
           video: true,
           audio: true,
         });
       } catch (mediaErr) {
+        if (mediaErr.name === 'TimeoutError') throw mediaErr;
         console.warn('Full video+audio media capture failed, trying audio-only fallback:', mediaErr);
         // Fallback to audio-only if camera is blocked or in use by another tab/window
-        stream = await navigator.mediaDevices.getUserMedia({
+        stream = await requestCallMedia(navigator.mediaDevices, {
           video: false,
           audio: true,
         });
         setIsVideoOff(true);
       }
 
+      if (request !== callRequest.current || chatId !== activeChatIdRef.current) { stream.getTracks().forEach((track) => track.stop()); return; }
       localStreamRef.current = stream;
       cameraTrackRef.current = stream.getVideoTracks()[0] || null;
       setLocalStream(stream);
@@ -457,8 +472,10 @@ export const useWebRTCCall = ({ socket, activeChatId, user }) => {
         socket.emit('call:join', { chatId: activeChatIdRef.current });
       }
     } catch (err) {
+      if (request !== callRequest.current) return;
       console.error('Failed to get media devices:', err);
       let msg = 'Could not access camera/microphone. Please check browser permissions.';
+      if (err.name === 'TimeoutError') msg = err.message;
       if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
         msg = 'No camera or microphone found on your device.';
       } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
@@ -467,6 +484,8 @@ export const useWebRTCCall = ({ socket, activeChatId, user }) => {
         msg = 'Camera or microphone is currently locked by another app or browser tab.';
       }
       setError(msg);
+    } finally {
+      if (request === callRequest.current) { startingRef.current = false; setIsStartingCall(false); }
     }
   };
 
@@ -609,6 +628,7 @@ export const useWebRTCCall = ({ socket, activeChatId, user }) => {
   }, [cleanupCall]);
 
   return {
+    isStartingCall,
     isCallActive,
     localStream,
     participants,

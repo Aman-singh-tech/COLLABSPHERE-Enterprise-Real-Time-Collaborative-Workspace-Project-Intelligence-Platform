@@ -8,7 +8,7 @@ const getFileIcon = (mimeType) => {
   return FileIcon;
 };
 
-const FileDetailsPanel = ({ file, versions = [], onClose, onShare, onDelete }) => {
+const FileDetailsPanel = ({ file, versions = [], onClose, onShare, onDelete, onDownload, onToggleLock, onUploadVersion, onRestoreVersion }) => {
   if (!file) return null;
   const Icon = getFileIcon(file.mimeType);
 
@@ -65,6 +65,11 @@ const FileDetailsPanel = ({ file, versions = [], onClose, onShare, onDelete }) =
         </button>
       </div>
 
+      {!file.isFolder && <div className="mb-4 flex flex-wrap gap-2 text-sm">
+        <button onClick={() => onDownload(file)} className="rounded border px-3 py-2">Download</button>
+        <button onClick={() => onToggleLock(file)} className="rounded border px-3 py-2">{file.isLocked ? 'Unlock' : 'Lock'}</button>
+        <button disabled={file.isLocked} onClick={onUploadVersion} className="rounded border px-3 py-2 disabled:opacity-50">Upload New Version</button>
+      </div>}
       {versions.length > 0 && (
         <div className="mt-5">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
@@ -80,6 +85,7 @@ const FileDetailsPanel = ({ file, versions = [], onClose, onShare, onDelete }) =
                 />
                 <div>
                   <p className="font-medium text-gray-700">{v.versionLabel}</p>
+                  <button disabled={file.isLocked} onClick={() => onRestoreVersion(v._id)} className="text-primary-600 disabled:opacity-50">Restore</button>
                   <p className="text-xs text-gray-400">
                     {formatFullDate(v.createdAt)} by {v.uploadedBy?.firstName}
                   </p>

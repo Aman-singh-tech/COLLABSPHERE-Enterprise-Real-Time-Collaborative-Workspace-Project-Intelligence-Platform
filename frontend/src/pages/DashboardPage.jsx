@@ -51,8 +51,8 @@ const DashboardPage = () => {
         <StatsCard
           icon={Zap}
           label="Productivity Score"
-          value="92/100"
-          delta="Top 5% of teams"
+          value={`${dashboard.productivityScore ?? 0}/100`}
+          delta="Based on completed tasks"
           accent
         />
       </div>

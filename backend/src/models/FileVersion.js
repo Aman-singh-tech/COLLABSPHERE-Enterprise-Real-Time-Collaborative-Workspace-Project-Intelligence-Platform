@@ -6,6 +6,7 @@ const fileVersionSchema = new mongoose.Schema(
     path: { type: String, required: true },
     url: { type: String, required: true },
     size: { type: Number, required: true },
+    mimeType: String,
     versionLabel: { type: String, default: '' }, // e.g. "V1 - Initial Draft"
     uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   },

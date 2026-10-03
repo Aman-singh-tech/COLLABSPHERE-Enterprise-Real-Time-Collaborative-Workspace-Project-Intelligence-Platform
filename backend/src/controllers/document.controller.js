@@ -1,11 +1,36 @@
 const catchAsync = require('../utils/catchAsync');
 const ApiResponse = require('../utils/apiResponse');
 const ApiError = require('../utils/apiError');
-const { Document, DocumentVersion } = require('../models');
+const { Document, DocumentVersion, Workspace } = require('../models');
+const { getAccessibleDocument, saveDocumentContent } = require('../services/document.service');
+
+const requireDocumentAccess = catchAsync(async (req, res, next) => {
+  const write = req.method !== 'GET';
+  await getAccessibleDocument(req.params.id, req.user._id, write);
+  next();
+});
+
+const saveContent = catchAsync(async (req, res) => {
+  const document = await saveDocumentContent(req.params.id, req.user._id, req.body.content);
+  const savedAt = document.updatedAt;
+  req.app.get('io')?.to(`document:${document._id}`).emit('document:saved', { savedAt, savedBy: req.user._id });
+  res.status(200).json(new ApiResponse(200, { document, savedAt }, 'Document saved.'));
+});
+
+const addComment = catchAsync(async (req, res) => {
+  const content = req.body.content?.trim();
+  if (!content || content.length > 5000) throw new ApiError(400, 'Comment must contain 1–5000 characters.');
+  const document = await Document.findByIdAndUpdate(req.params.id, {
+    $push: { comments: { author: req.user._id, content } },
+  }, { new: true, runValidators: true }).populate('comments.author', 'firstName lastName avatar');
+  res.status(201).json(new ApiResponse(201, { comments: document.comments }, 'Comment added.'));
+});
 
 // POST /api/v1/documents
 const createDocument = catchAsync(async (req, res) => {
   const { title, workspaceId, projectId } = req.body;
+  const workspace = await Workspace.findOne({ _id: workspaceId, isActive: true, 'members.user': req.user._id });
+  if (!workspace || workspace.members.find((member) => member.user.toString() === req.user._id.toString()).role === 'guest') throw new ApiError(403, 'You cannot create documents in this workspace.');
 
   const document = await Document.create({
     title,
@@ -26,6 +51,7 @@ const createDocument = catchAsync(async (req, res) => {
 const getDocuments = catchAsync(async (req, res) => {
   const { workspaceId } = req.query;
   if (!workspaceId) throw new ApiError(400, 'workspaceId query param is required.');
+  if (!await Workspace.exists({ _id: workspaceId, isActive: true, 'members.user': req.user._id })) throw new ApiError(403, 'You do not have access to this workspace.');
 
   const documents = await Document.find({ workspace: workspaceId, isArchived: false })
     .select('title updatedAt tags lastEditedBy')
@@ -40,7 +66,7 @@ const getDocumentById = catchAsync(async (req, res) => {
   const document = await Document.findById(req.params.id).populate(
     'collaborators.user',
     'firstName lastName avatar'
-  );
+  ).populate('comments.author', 'firstName lastName avatar');
   if (!document) throw new ApiError(404, 'Document not found.');
 
   res.status(200).json(new ApiResponse(200, { document }));
@@ -91,7 +117,7 @@ const getVersionHistory = catchAsync(async (req, res) => {
 // POST /api/v1/documents/:id/versions/:versionId/restore
 const restoreVersion = catchAsync(async (req, res) => {
   const version = await DocumentVersion.findById(req.params.versionId);
-  if (!version) throw new ApiError(404, 'Version not found.');
+  if (!version || version.document.toString() !== req.params.id) throw new ApiError(404, 'Version not found.');
 
   const document = await Document.findByIdAndUpdate(
     req.params.id,
@@ -132,6 +158,9 @@ const archiveDocument = catchAsync(async (req, res) => {
 });
 
 module.exports = {
+  requireDocumentAccess,
+  saveContent,
+  addComment,
   createDocument,
   getDocuments,
   getDocumentById,

@@ -7,6 +7,8 @@ const { pushNotification } = require('../sockets/notification.socket');
 // POST /api/v1/tasks
 const createTask = catchAsync(async (req, res) => {
   const { title, description, boardId, columnId, priority, labels, assignees, dueDate } = req.body;
+  const column = await Column.findOne({ _id: columnId, board: boardId });
+  if (!column) throw new ApiError(400, 'Column does not belong to this board.');
 
   const task = await Task.create({
     title,
@@ -17,6 +19,7 @@ const createTask = catchAsync(async (req, res) => {
     labels,
     assignees,
     dueDate,
+    completedAt: /^(done|completed)$/i.test(column.name) ? new Date() : null,
     createdBy: req.user._id,
   });
 
@@ -108,6 +111,8 @@ const moveTask = catchAsync(async (req, res) => {
   if (!task) throw new ApiError(404, 'Task not found.');
 
   const sourceColumnId = task.column;
+  const destination = await Column.findOne({ _id: destColumnId, board: task.board });
+  if (!destination) throw new ApiError(400, 'Destination column does not belong to this board.');
 
   if (sourceColumnId.toString() !== destColumnId) {
     await Column.findByIdAndUpdate(sourceColumnId, { $pull: { taskOrder: task._id } });
@@ -115,6 +120,7 @@ const moveTask = catchAsync(async (req, res) => {
       $push: { taskOrder: { $each: [task._id], $position: destIndex } },
     });
     task.column = destColumnId;
+    task.completedAt = /^(done|completed)$/i.test(destination.name) ? (task.completedAt || new Date()) : null;
     await task.save();
   } else {
     const column = await Column.findById(destColumnId);

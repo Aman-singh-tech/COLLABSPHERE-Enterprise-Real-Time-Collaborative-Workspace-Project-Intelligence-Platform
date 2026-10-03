@@ -82,7 +82,7 @@ const getMessageHistory = catchAsync(async (req, res) => {
   const { chatId } = req.params;
   const { before, limit = 30 } = req.query;
 
-  const query = { chat: chatId, isDeleted: false, deletedFor: { $ne: req.user._id } };
+  const query = { chat: chatId, parentMessage: null, isDeleted: false, deletedFor: { $ne: req.user._id } };
   if (before) {
     const beforeMsg = await Message.findById(before);
     if (beforeMsg) query.createdAt = { $lt: beforeMsg.createdAt };

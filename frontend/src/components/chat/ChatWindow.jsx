@@ -17,6 +17,7 @@ const ChatWindow = ({
   currentUserId,
   onToggleInfo,
   onStartCall,
+  isStartingCall,
   isCallActive = false,
   callActiveCount = 0,
 }) => {
@@ -49,11 +50,12 @@ const ChatWindow = ({
         <div className="flex items-center gap-2">
           <button
             onClick={onStartCall}
+            disabled={isStartingCall}
             title={isCallActive ? 'Return to Video Call' : 'Start Video Call'}
             className="flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-600 hover:bg-indigo-100 transition-colors shadow-sm"
           >
             <Video size={15} />
-            <span>{isCallActive ? 'In Call' : 'Video Call'}</span>
+            <span>{isStartingCall ? 'Starting…' : isCallActive ? 'In Call' : 'Video Call'}</span>
           </button>
 
           <button

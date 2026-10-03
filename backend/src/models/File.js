@@ -6,8 +6,8 @@ const fileSchema = new mongoose.Schema(
     originalName: { type: String, required: true },
     mimeType: { type: String, required: true },
     size: { type: Number, required: true }, // bytes
-    path: { type: String, required: true }, // storage path/key
-    url: { type: String, required: true },
+    path: { type: String, required() { return !this.isFolder; }, default: '' },
+    url: { type: String, required() { return !this.isFolder; }, default: '' },
 
     workspace: { type: mongoose.Schema.Types.ObjectId, ref: 'Workspace', required: true, index: true },
     folder: { type: mongoose.Schema.Types.ObjectId, ref: 'File', default: null }, // parent folder (self-ref)

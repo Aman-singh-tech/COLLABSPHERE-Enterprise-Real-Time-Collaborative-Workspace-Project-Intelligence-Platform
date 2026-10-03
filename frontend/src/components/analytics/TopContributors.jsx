@@ -5,7 +5,6 @@ const TopContributors = ({ contributors = [] }) => {
     <div className="rounded-xl border border-gray-100 bg-white p-5">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-base font-semibold text-gray-900">Top Contributors</h3>
-        <button className="text-sm font-medium text-primary-600 hover:underline">View All →</button>
       </div>
 
       <table className="w-full text-left text-sm">
@@ -32,10 +31,10 @@ const TopContributors = ({ contributors = [] }) => {
                 <span className="font-medium text-gray-800">{c.name}</span>
               </td>
               <td className="text-gray-500">{c.role || 'Member'}</td>
-              <td className="font-semibold text-gray-800">{c.taskCount}</td>
+              <td className="font-semibold text-gray-800">{c.completedCount ?? 0}</td>
               <td>
                 <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                  Online
+                  {c.status || 'Unknown'}
                 </span>
               </td>
             </tr>

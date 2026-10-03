@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
+import DOMPurify from 'dompurify';
+import { documentService } from '../../services/document.service';
 import {
   Bold,
   Italic,
@@ -33,11 +35,56 @@ const FONT_SIZES = ['12px', '14px', '16px', '18px', '20px', '24px', '32px'];
 const TEXT_COLORS = ['#111827', '#4B5563', '#DC2626', '#D97706', '#059669', '#2563EB', '#7C3AED', '#DB2777'];
 const HIGHLIGHT_COLORS = ['transparent', '#FEF08A', '#BBF7D0', '#BFDBFE', '#FBCFE8', '#FED7AA'];
 
-const DocumentEditor = ({ documentId, initialContentHtml, socket, currentUser, onSave }) => {
+const DocumentEditor = forwardRef(({ documentId, initialContentHtml, socket, currentUser, onSave }, ref) => {
   const editorRef = useRef(null);
   const saveTimeoutRef = useRef(null);
   const [activeEditors, setActiveEditors] = useState({});
   const [lastSavedAt, setLastSavedAt] = useState(null);
+  const [saveStatus, setSaveStatus] = useState('idle');
+  const pendingContent = useRef(null);
+  const saveQueue = useRef(Promise.resolve());
+  const mounted = useRef(true);
+  const revision = useRef(0);
+
+  const flushSave = useCallback(() => {
+    clearTimeout(saveTimeoutRef.current);
+    if (pendingContent.current === null) return saveQueue.current;
+    const html = pendingContent.current;
+    const savedRevision = revision.current;
+    pendingContent.current = null;
+    if (mounted.current) setSaveStatus('saving');
+    const request = saveQueue.current.catch(() => {}).then(() => documentService.saveContent(documentId, html));
+    saveQueue.current = request;
+    return request.then((response) => {
+      if (mounted.current && savedRevision === revision.current) {
+        setLastSavedAt(response.data.savedAt);
+        setSaveStatus('saved');
+      }
+      onSave?.(html);
+      return response;
+    }).catch((error) => {
+      if (mounted.current) {
+        if (savedRevision === revision.current) pendingContent.current = html;
+        setSaveStatus('error');
+      }
+      throw error;
+    });
+  }, [documentId, onSave]);
+
+  useImperativeHandle(ref, () => ({ save: flushSave }), [flushSave]);
+  useEffect(() => {
+    const warnBeforeLeaving = (event) => {
+      if (!['pending', 'saving', 'error'].includes(saveStatus)) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeLeaving);
+    return () => window.removeEventListener('beforeunload', warnBeforeLeaving);
+  }, [saveStatus]);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; flushSave().catch(() => {}); };
+  }, [flushSave]);
   const [wordCount, setWordCount] = useState(0);
   const [charCount, setCharCount] = useState(0);
   const [selectedFont, setSelectedFont] = useState(FONT_FAMILIES[0].value);
@@ -54,8 +101,8 @@ const DocumentEditor = ({ documentId, initialContentHtml, socket, currentUser, o
   };
 
   useEffect(() => {
-    if (editorRef.current && initialContentHtml) {
-      editorRef.current.innerHTML = initialContentHtml;
+    if (editorRef.current) {
+      editorRef.current.innerHTML = DOMPurify.sanitize(initialContentHtml || '');
       updateStats();
     }
   }, [initialContentHtml]);
@@ -69,7 +116,7 @@ const DocumentEditor = ({ documentId, initialContentHtml, socket, currentUser, o
       if (userId === currentUser?._id) return;
       isRemoteUpdate.current = true;
       if (editorRef.current) {
-        editorRef.current.innerHTML = changes;
+        editorRef.current.innerHTML = DOMPurify.sanitize(changes);
         updateStats();
       }
       isRemoteUpdate.current = false;
@@ -99,21 +146,23 @@ const DocumentEditor = ({ documentId, initialContentHtml, socket, currentUser, o
   }, [socket, documentId, currentUser]);
 
   const handleInput = useCallback(() => {
-    if (isRemoteUpdate.current || !socket) return;
+    if (isRemoteUpdate.current) return;
 
     updateStats();
     const html = editorRef.current.innerHTML;
 
-    socket.emit('document:change', { documentId, changes: html, version: Date.now() });
-    socket.emit('document:typing', { documentId, isTyping: true });
+    socket?.emit('document:change', { documentId, changes: html, version: Date.now() });
+    socket?.emit('document:typing', { documentId, isTyping: true });
+    pendingContent.current = html;
+    revision.current += 1;
+    setSaveStatus('pending');
 
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
-      socket.emit('document:save', { documentId, content: html });
-      socket.emit('document:typing', { documentId, isTyping: false });
-      onSave?.(html);
+      flushSave().catch(() => {});
+      socket?.emit('document:typing', { documentId, isTyping: false });
     }, 1200);
-  }, [socket, documentId, onSave]);
+  }, [socket, documentId, flushSave]);
 
   const exec = (command, value = null) => {
     document.execCommand(command, false, value);
@@ -272,7 +321,7 @@ const DocumentEditor = ({ documentId, initialContentHtml, socket, currentUser, o
             ))}
           </div>
           <span className="text-xs text-gray-400">
-            {lastSavedAt ? `Saved ${new Date(lastSavedAt).toLocaleTimeString()}` : 'Saved to Cloud'}
+            {saveStatus === 'error' ? 'Save failed — use Save to retry' : saveStatus === 'pending' ? 'Unsaved changes' : saveStatus === 'saving' ? 'Saving…' : lastSavedAt ? `Saved ${new Date(lastSavedAt).toLocaleTimeString()}` : 'No unsaved changes'}
           </span>
         </div>
       </div>
@@ -305,6 +354,6 @@ const DocumentEditor = ({ documentId, initialContentHtml, socket, currentUser, o
       </div>
     </div>
   );
-};
+});
 
 export default DocumentEditor;

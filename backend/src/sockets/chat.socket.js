@@ -54,8 +54,8 @@ const registerChatHandlers = (io, socket) => {
 
       let reaction = message.reactions.find((r) => r.emoji === emoji);
       if (!reaction) {
-        reaction = { emoji, users: [] };
-        message.reactions.push(reaction);
+        message.reactions.push({ emoji, users: [] });
+        reaction = message.reactions[message.reactions.length - 1];
       }
 
       const userIdx = reaction.users.findIndex((u) => u.toString() === socket.user._id.toString());

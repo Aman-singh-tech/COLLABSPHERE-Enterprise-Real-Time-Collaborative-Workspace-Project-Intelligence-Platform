@@ -6,6 +6,7 @@ const { Workspace, User, Project, Document, Task, Board } = require('../models')
 const { ROLES } = require('../config/constants');
 const { pushNotification } = require('../sockets/notification.socket');
 const { sendEmail } = require('../services/email.service');
+const { getWorkspaceOverview } = require('../services/analytics.service');
 
 const slugify = (str) =>
   str
@@ -85,6 +86,7 @@ const getMyWorkspaces = catchAsync(async (req, res) => {
     isActive: true,
   })
     .populate('organization', 'name slug logo')
+    .populate('members.user', 'firstName lastName email avatar status')
     .sort('-updatedAt');
 
   for (const ws of workspaces) {
@@ -248,6 +250,7 @@ const getDashboardSummary = catchAsync(async (req, res) => {
       tasksDueToday,
       totalActiveTasks,
       activeMembers: req.workspace ? req.workspace.members.length : undefined,
+      productivityScore: (await getWorkspaceOverview(workspaceId)).productivityScore,
     })
   );
 });

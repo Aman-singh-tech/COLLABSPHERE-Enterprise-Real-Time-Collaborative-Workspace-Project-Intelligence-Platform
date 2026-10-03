@@ -12,6 +12,7 @@ router.use(protect);
 router.post('/upload', uploadFile.single('file'), fileController.uploadFile);
 router.post('/folders', createFolderValidator, validate, fileController.createFolder);
 router.get('/', fileController.listFiles);
+router.use('/:id', fileController.requireFileAccess);
 router.get('/:id', fileController.getFileDetails);
 router.post('/:id/versions', uploadFile.single('file'), fileController.uploadNewVersion);
 router.post('/:id/versions/:versionId/restore', fileController.restoreVersion);

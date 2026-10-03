@@ -129,6 +129,7 @@ const KanbanBoard = ({ boardId }) => {
         taskId={selectedTaskId}
         onClose={() => setSelectedTaskId(null)}
         onDeleted={() => dispatch(fetchBoard(boardId))}
+        onUpdated={() => dispatch(fetchBoard(boardId))}
       />
     </DndProvider>
   );

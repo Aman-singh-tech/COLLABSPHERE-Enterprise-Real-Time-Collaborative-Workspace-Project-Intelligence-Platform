@@ -36,6 +36,11 @@ const workspaceSlice = createSlice({
   reducers: {
     setActiveWorkspace: (state, action) => {
       state.activeWorkspace = action.payload;
+      if (action.payload) {
+        const index = state.list.findIndex((workspace) => workspace._id === action.payload._id);
+        if (index < 0) state.list.push(action.payload);
+        else state.list[index] = action.payload;
+      }
     },
   },
   extraReducers: (builder) => {
@@ -46,7 +51,9 @@ const workspaceSlice = createSlice({
       .addCase(fetchMyWorkspaces.fulfilled, (state, action) => {
         state.status = 'succeeded';
         state.list = action.payload;
-        if (!state.activeWorkspace && action.payload.length > 0) {
+        if (state.activeWorkspace) {
+          state.activeWorkspace = action.payload.find((workspace) => workspace._id === state.activeWorkspace._id) || null;
+        } else if (action.payload.length > 0) {
           state.activeWorkspace = action.payload[0];
         }
       })

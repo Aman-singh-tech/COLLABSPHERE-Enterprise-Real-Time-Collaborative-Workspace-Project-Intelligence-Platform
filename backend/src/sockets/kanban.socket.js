@@ -13,12 +13,15 @@ const registerKanbanHandlers = (io, socket) => {
   // Optimistic drag-and-drop move, broadcast to everyone else viewing the board
   socket.on('task:move', async ({ boardId, taskId, sourceColumnId, destColumnId, destIndex }) => {
     try {
+      const destination = await Column.findOne({ _id: destColumnId, board: boardId });
+      const task = await Task.findOne({ _id: taskId, board: boardId });
+      if (!destination || !task || task.column.toString() !== sourceColumnId) throw new Error('Invalid task move.');
       if (sourceColumnId !== destColumnId) {
         await Column.findByIdAndUpdate(sourceColumnId, { $pull: { taskOrder: taskId } });
         await Column.findByIdAndUpdate(destColumnId, {
           $push: { taskOrder: { $each: [taskId], $position: destIndex } },
         });
-        await Task.findByIdAndUpdate(taskId, { column: destColumnId });
+        await Task.findByIdAndUpdate(taskId, { column: destColumnId, completedAt: /^(done|completed)$/i.test(destination.name) ? (task.completedAt || new Date()) : null });
       } else {
         const column = await Column.findById(destColumnId);
         column.taskOrder = column.taskOrder.filter((id) => id.toString() !== taskId);

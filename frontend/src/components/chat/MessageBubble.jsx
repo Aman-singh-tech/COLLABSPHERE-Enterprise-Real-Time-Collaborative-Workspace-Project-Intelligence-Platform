@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Smile, FileText, Trash2, Video, ExternalLink } from 'lucide-react';
+import { Link, useParams } from 'react-router-dom';
+import { Smile, FileText, Trash2, Video, ExternalLink, MessageSquare } from 'lucide-react';
 import Avatar from '../common/Avatar';
 import { formatRelativeTime } from '../../utils/formatDate';
 
@@ -9,6 +9,7 @@ const URL_REGEX = /(https?:\/\/[^\s]+)/g;
 
 const MessageBubble = ({ message, onReact, onOpenThread, onDeleteForMe, currentUserId }) => {
   const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const { workspaceId } = useParams();
 
   const getInternalPath = (urlStr) => {
     if (!urlStr) return null;
@@ -128,12 +129,12 @@ const MessageBubble = ({ message, onReact, onOpenThread, onDeleteForMe, currentU
                 </p>
               </div>
             </div>
-            <a
-              href={`/workspaces/${message.chat?.workspace || ''}/documents`}
+            <Link
+              to={`/workspaces/${workspaceId}/documents/${message.sharedDocument._id || message.sharedDocument}`}
               className="shrink-0 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-primary-600 shadow-sm transition-all hover:bg-primary-600 hover:text-white border border-primary-200"
             >
               Open
-            </a>
+            </Link>
           </div>
         )}
 
@@ -157,12 +158,12 @@ const MessageBubble = ({ message, onReact, onOpenThread, onDeleteForMe, currentU
           </div>
         )}
 
-        {message.threadReplyCount > 0 && (
+        {(
           <button
             onClick={() => onOpenThread(message)}
             className="mt-1.5 text-xs font-medium text-primary-600 hover:underline"
           >
-            {message.threadReplyCount} {message.threadReplyCount === 1 ? 'reply' : 'replies'}
+            {message.threadReplyCount > 0 ? `${message.threadReplyCount} replies` : 'Reply in thread'}
           </button>
         )}
       </div>

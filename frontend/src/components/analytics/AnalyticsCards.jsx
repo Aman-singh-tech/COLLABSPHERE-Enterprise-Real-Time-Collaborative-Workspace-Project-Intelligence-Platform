@@ -23,13 +23,11 @@ const AnalyticsCards = ({ overview }) => {
 
       <div className="rounded-xl border border-gray-100 bg-white p-5">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-gray-500">Growth Rate</span>
+          <span className="text-sm font-medium text-gray-500">Completed This Period</span>
           <Zap size={18} className="text-primary-500" />
         </div>
         <p className="mt-2 text-3xl font-bold text-gray-900">
-          {overview.totalTasks > 0
-            ? `${Math.round((overview.completedThisPeriod / overview.totalTasks) * 100)}%`
-            : '0%'}
+          {overview.completedThisPeriod ?? 0}
         </p>
       </div>
     </div>

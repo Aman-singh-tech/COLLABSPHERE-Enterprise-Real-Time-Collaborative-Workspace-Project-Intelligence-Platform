@@ -16,6 +16,7 @@ const MainLayout = () => {
   const { workspaceId } = useParams();
   const { list, activeWorkspace, status } = useSelector((state) => state.workspace);
   const { socket } = useSocket();
+  const routeWorkspace = list.find((workspace) => workspace._id === workspaceId);
 
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -27,7 +28,7 @@ const MainLayout = () => {
   useEffect(() => {
     if (workspaceId && list.length) {
       const ws = list.find((w) => w._id === workspaceId);
-      if (ws) dispatch(setActiveWorkspace(ws));
+      dispatch(setActiveWorkspace(ws || null));
     }
   }, [workspaceId, list, dispatch]);
 
@@ -38,9 +39,9 @@ const MainLayout = () => {
   }, [socket, activeWorkspace]);
 
   const handleInvite = async () => {
-    if (!activeWorkspace) return;
+    if (!routeWorkspace || !inviteEmail.trim()) return;
     try {
-      await workspaceService.inviteMember(activeWorkspace._id, { email: inviteEmail });
+      await workspaceService.inviteMember(workspaceId, { email: inviteEmail.trim() });
       toast.success('Invitation sent!');
       setIsInviteOpen(false);
       setInviteEmail('');
@@ -49,15 +50,15 @@ const MainLayout = () => {
     }
   };
 
-  if (status === 'loading' && !list.length) {
+  if (status === 'idle' || (status === 'loading' && !routeWorkspace)) {
     return <Loader fullScreen />;
   }
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
-      <Sidebar workspace={activeWorkspace} onInviteClick={() => setIsInviteOpen(true)} />
+      <Sidebar workspace={routeWorkspace} onInviteClick={() => setIsInviteOpen(true)} />
 
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Navbar onQuickAdd={() => setIsInviteOpen(true)} />
         <main className="flex-1 overflow-y-auto p-6">
           <Outlet context={{ activeWorkspace }} />
@@ -83,17 +84,17 @@ const MainLayout = () => {
             Send Email Invitation
           </button>
 
-          {activeWorkspace?.inviteCode && (
+          {routeWorkspace?.inviteCode && (
             <div className="border-t border-gray-100 pt-3">
               <p className="mb-1 text-xs font-medium text-gray-500">Or Share Workspace Join Code</p>
               <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 p-2.5">
                 <span className="font-mono text-sm font-bold text-gray-800">
-                  {activeWorkspace.inviteCode}
+                  {routeWorkspace.inviteCode}
                 </span>
                 <button
                   type="button"
                   onClick={() => {
-                    navigator.clipboard.writeText(activeWorkspace.inviteCode);
+                    navigator.clipboard.writeText(routeWorkspace.inviteCode);
                     toast.success('Join code copied!');
                   }}
                   className="rounded border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-primary-600 shadow-sm hover:bg-gray-50"
